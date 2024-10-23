@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+import uuid
 
-# Function to handle file upload and return dataframe
+# Function to load an Excel file and return a dataframe
 def load_excel(file):
     df = pd.read_excel(file)
     return df
@@ -19,7 +20,7 @@ def operation_transpose(df):
 def operation_describe(df):
     return df.describe()
 
-# Function to download data as Excel
+# Function to download a dataframe as an Excel file
 def download_excel(df, filename="result.xlsx"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -27,78 +28,72 @@ def download_excel(df, filename="result.xlsx"):
     processed_data = output.getvalue()
     return processed_data
 
-# Callback function to perform operations when "Generate" is clicked
-def generate_operations():
-    df = st.session_state[f"{st.session_state.session_id}_df"]
-    operations = st.session_state[f"{st.session_state.session_id}_operations"]
-
-    # Store results in session state
-    results_key = f"{st.session_state.session_id}_results"
-    if results_key not in st.session_state:
-        st.session_state[results_key] = {}
-
-    # Perform operations based on selection
-    if "Sum of columns" in operations:
-        st.session_state[results_key]["sum"] = operation_sum(df)
-    if "Transpose" in operations:
-        st.session_state[results_key]["transpose"] = operation_transpose(df)
-    if "Descriptive statistics" in operations:
-        st.session_state[results_key]["describe"] = operation_describe(df)
-
-    st.session_state[f"{st.session_state.session_id}_generated"] = True
-
 # Streamlit App
 def main():
     st.title("Excel File Operations App")
 
-    # Initialize session-specific state to avoid user data collision
+    # Unique session identifier for each user to isolate their data
     if "session_id" not in st.session_state:
-        st.session_state.session_id = str(st.experimental_get_query_params()) or str(st.experimental_get_url()).split("?")[-1]
+        st.session_state.session_id = str(uuid.uuid4())  # Generate unique session ID
 
-    # Initialize user-specific session state variables for storing data and results
-    df_key = f"{st.session_state.session_id}_df"
-    results_key = f"{st.session_state.session_id}_results"
-    operations_key = f"{st.session_state.session_id}_operations"
-    generated_key = f"{st.session_state.session_id}_generated"
+    # Session-specific state management
+    session_id = st.session_state.session_id  # Unique to each user session
 
-    if df_key not in st.session_state:
-        st.session_state[df_key] = None
-    if results_key not in st.session_state:
-        st.session_state[results_key] = {}
-    if operations_key not in st.session_state:
-        st.session_state[operations_key] = []
-    if generated_key not in st.session_state:
-        st.session_state[generated_key] = False  # Track if generation is done
+    # Initialize session state variables if not already set
+    if f"{session_id}_uploaded_file" not in st.session_state:
+        st.session_state[f"{session_id}_uploaded_file"] = None
+    if f"{session_id}_results" not in st.session_state:
+        st.session_state[f"{session_id}_results"] = {}
+    if f"{session_id}_generated" not in st.session_state:
+        st.session_state[f"{session_id}_generated"] = False
+    if f"{session_id}_operations_selected" not in st.session_state:
+        st.session_state[f"{session_id}_operations_selected"] = []
 
-    # Upload Excel file
-    uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
-    
-    if uploaded_file is not None:
-        st.session_state[df_key] = load_excel(uploaded_file)  # Store dataframe in session state
+    # File uploader
+    uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"], key=f"file_uploader_{session_id}")
+
+    if uploaded_file is not None and st.session_state[f"{session_id}_uploaded_file"] != uploaded_file:
+        st.session_state[f"{session_id}_uploaded_file"] = uploaded_file
+        st.session_state[f"{session_id}_generated"] = False  # Reset state if a new file is uploaded
+        st.session_state[f"{session_id}_df"] = load_excel(uploaded_file)  # Load the Excel file into session state
         st.write("Preview of uploaded file:")
-        st.write(st.session_state[df_key].head())
+        st.write(st.session_state[f"{session_id}_df"].head())
 
-    if st.session_state[df_key] is not None:
-        # Operations to select
-        st.session_state[operations_key] = st.multiselect(
-            "Select Operations", 
-            options=["Sum of columns", "Transpose", "Descriptive statistics"]
+    # Once a file is uploaded
+    if st.session_state[f"{session_id}_uploaded_file"] is not None:
+        # Multi-select operations
+        st.session_state[f"{session_id}_operations_selected"] = st.multiselect(
+            "Select Operations",
+            options=["Sum of columns", "Transpose", "Descriptive statistics"],
+            default=st.session_state[f"{session_id}_operations_selected"],
+            key=f"multiselect_{session_id}"
         )
 
-        # "Generate" button that uses a callback
-        if st.button("Generate", on_click=generate_operations):
-            st.session_state[generated_key] = True
+        # "Generate" button for operations
+        if st.button("Generate", key=f"generate_button_{session_id}") and not st.session_state[f"{session_id}_generated"]:
+            st.session_state[f"{session_id}_results"] = {}  # Clear previous results
 
-        # Display download buttons only if operations are generated
-        if st.session_state[generated_key]:
-            for key, result_df in st.session_state[results_key].items():
+            # Perform the operations and store the results in session state
+            if "Sum of columns" in st.session_state[f"{session_id}_operations_selected"]:
+                st.session_state[f"{session_id}_results"]["sum"] = operation_sum(st.session_state[f"{session_id}_df"])
+            if "Transpose" in st.session_state[f"{session_id}_operations_selected"]:
+                st.session_state[f"{session_id}_results"]["transpose"] = operation_transpose(st.session_state[f"{session_id}_df"])
+            if "Descriptive statistics" in st.session_state[f"{session_id}_operations_selected"]:
+                st.session_state[f"{session_id}_results"]["describe"] = operation_describe(st.session_state[f"{session_id}_df"])
+
+            st.session_state[f"{session_id}_generated"] = True  # Mark results as generated
+
+        # Display and download the results without page reruns
+        if st.session_state[f"{session_id}_generated"]:
+            for key, result_df in st.session_state[f"{session_id}_results"].items():
                 st.subheader(f"Result: {key}")
                 st.write(result_df)
                 st.download_button(
                     label=f"Download {key} result as Excel",
                     data=download_excel(result_df),
-                    file_name=f"{key}_result.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    file_name=f"{key}_result_{session_id}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"download_button_{key}_{session_id}"
                 )
 
 # Ensure that the app retains the state between user interactions
