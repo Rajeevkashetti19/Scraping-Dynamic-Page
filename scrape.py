@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import json
+import pickle
 
 # URL for scraping jobs by country
 country_template="https://jobs.citi.com/search-jobs/results?ActiveFacetID={industry}&CurrentPage=1&RecordsPerPage=10&Distance=50&RadiusUnitType=0&Keywords=&Location=&ShowRadius=False&IsPagination=False&CustomFacetName=&FacetTerm=&FacetType=0&FacetFilters%5B0%5D.ID={industry}&FacetFilters%5B0%5D.FacetType=5&FacetFilters%5B0%5D.Count={count}&FacetFilters%5B0%5D.Display={industry}&FacetFilters%5B0%5D.IsApplied=true&FacetFilters%5B0%5D.FieldName=industry&SearchResultsModuleName=SearchResults+-+Technology&SearchFiltersModuleName=Search+Filters&SortCriteria=0&SortDirection=0&SearchType=6&PostalCode=&ResultsType=0&fc=&fl=&fcf=&afc=&afl=&afcf="
@@ -277,6 +278,13 @@ def main():
         print(f"Fetching regions for {industry}...")
         countries = fetch_countries_and_regions(industry)
         countries_by_industry[industry[0]] = countries
+    
+    with open("Final_list","wb") as f:
+        pickle.dump(countries_by_industry,f)
+    
+    
+    
+
 
     # # Step 3: Output results
     # for country, regions in regions_by_country.items():
